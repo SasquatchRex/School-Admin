@@ -6,6 +6,27 @@ import os
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.http import HttpResponse, JsonResponse
+import shutil
+
+
+@api_view(['POST'])
+def backup_files(request):
+    source_folder_path = os.path.join(settings.BASE_DIR,"static","export")
+    destination_folder_path = os.path.join(settings.BASE_DIR,"static","backup")
+    try:
+        # Create destination folder if it doesn't exist
+        if not os.path.exists(destination_folder_path):
+            os.makedirs(destination_folder_path)
+
+        # Iterate over files in source folder and copy them to destination folder
+        for filename in os.listdir(source_folder_path):
+            source_file_path = os.path.join(source_folder_path, filename)
+            destination_file_path = os.path.join(destination_folder_path, filename)
+            shutil.copy(source_file_path, destination_file_path)
+
+        return Response()
+    except Exception as e:
+        return Response(f"An error occurred: {e}")
 
 
 @api_view(['GET'])
@@ -25,22 +46,69 @@ from django.http import FileResponse
 from django.views.decorators.csrf import csrf_exempt
 
 
-@csrf_exempt  # Only if you're allowing non-browser clients to access this endpoint
-def get_dynamic_file(request, filename):
-    # Logic to generate or fetch dynamically generated file content
-    file_path = os.path.join(settings.BASE_DIR,"static","export")
-
-    if os.path.exists(file_path):
-        # Return the file as a response
-        return FileResponse(open(file_path, 'rb'))
-    else:
-        return JsonResponse({'error': 'File not found'}, status=404)
-
+# @csrf_exempt  # Only if you're allowing non-browser clients to access this endpoint
+# def get_dynamic_file(request, filename):
+#     # Logic to generate or fetch dynamically generated file content
+#     file_path = os.path.join(settings.BASE_DIR,"static","export")
+#
+#     if os.path.exists(file_path):
+#         # Return the file as a response
+#         return FileResponse(open(file_path, 'rb'))
+#     else:
+#         return JsonResponse({'error': 'File not found'}, status=404)
+#
 def get_all_files(request):
     directory = os.path.join(settings.BASE_DIR,"static","export")
     # file_urls = [request.build_absolute_uri(os.path.join(directory, file_name)) for file_name in files]
     return JsonResponse({'path': directory})
 
+# from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from PIL import Image
+import os
+from reportlab.lib.pagesizes import A4
+
+
+@api_view(['POST'])
+def convert_pngs_to_pdf(request):
+    # Create a PDF canvas
+    png_folder = os.path.join(settings.BASE_DIR,"static","export")  # Path to the folder containing PNG files
+    output_pdf_path =os.path.join(settings.BASE_DIR,"static","output.pdf")
+    c = canvas.Canvas(output_pdf_path, pagesize=A4)
+
+    # Get a list of all PNG files in the folder
+    png_files = [file for file in os.listdir(png_folder) if file.endswith('.png')]
+
+    # Sort the list of PNG files to ensure proper ordering
+    png_files.sort()
+
+    # Loop through each PNG file
+    for png_file in png_files:
+        # Open the PNG file
+        img = Image.open(os.path.join(png_folder, png_file))
+
+        width_ratio = A4[0] / img.width
+        height_ratio = A4[1] / img.height
+        scaling_factor = min(width_ratio, height_ratio)
+
+        # Calculate the new dimensions of the image
+        new_width = img.width * scaling_factor
+        new_height = img.height * scaling_factor
+
+        # Get the size of the PNG image
+        # Draw the PNG image onto the PDF canvas
+        c.drawImage(os.path.join(png_folder, png_file), 0, 0, new_width, new_height)
+
+        # Add a new page for the next image
+        c.showPage()
+
+    # Save the PDF
+    c.save()
+    # Response = 0
+    return Response({"path": os.path.join(settings.BASE_DIR, "static")})
+
+# Example usage:
+ # Path to save the output PDF file
 
 @api_view(['GET'])
 def main(request):
@@ -54,7 +122,7 @@ def main(request):
     a = 0
     b = {}
 
-    image_path = os.path.join(settings.BASE_DIR, "static", 'marksheet.png')
+    image_path = os.path.join(settings.BASE_DIR, "static", 'marksheet1.png')
     image = Image.open(image_path)
 
     export_data = [
